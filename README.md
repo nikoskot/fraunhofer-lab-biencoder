@@ -26,9 +26,20 @@ To evaluate an existing biencoder, run `python biencoder.py --data-path $path_to
 Similar commands can be used to run the frozen probe for WSD (`frozen_pretrained_encoder.py`) and the finetuning a pretrained, single encoder classifier for WSD (`finetune_pretrained_encoder.py`).
 
 ## How to Reproduce the results of the paper
-In order to reproduce the results the mention library dependences are needed. One problem is that the "Pytorch Transformers 1.1.0" link goes to the wrong package. The correct package is in [this](https://pypi.org/project/pytorch-transformers/) link and can be installed using pip. For convenience I have included in the repo the environment.yml file that was created from my miniconda environment that I used to reproduce the results of the paper.
+In order to reproduce the results, the mention library dependences are needed. One problem is that the "Pytorch Transformers 1.1.0" link goes to the wrong package. The correct package is in [this](https://pypi.org/project/pytorch-transformers/) link and can be installed using pip. For convenience I have included in the repo the 'environment.yml' file that was created from my miniconda environment that I used to reproduce the results of the paper.
 
+Before initiating the training of the model, some extrasteps that we have to do are:
+* Download the WSD Evaluation framework from the link provided above.
+* Create a folder inside which the model training checkpoints and the evaluation results will be stored
+* Compile the Scorer.java that can be found in the "WSD_Evaluation_Framework\Evaluation_Datasets" folder. (javac Scorer.java)
+* (OPTIONAL) If you have very limited space in your disk you can remove the "SemCor+OMSTI" part of the dataset that can be found inside the "WSD_Evaluation_Framework\Training_Corpora" folder. For the training process, only the SemCor part is used.
 
+To train the model we use the command as described above. Run `python biencoder.py --data-path $path_to_WSD_Evaluation_Framework_folder --ckpt $path_inside_training_checkpoint_folder_you_created --gloss-bsz 64`. I added the gloss batch size part because the training process was using too much GPU memory for my system. You should adjust it accordingly.
+
+After the training process is finished, there should be a checkpoint file created inside the training_checkpoint folder, named 'best_model.ckpt'.
+
+To evaluate the model on the evaluation datasets we use the command as described above. Run `python biencoder.py --data-path $path_to_WSD_Evaluation_Framework_folder --ckpt $path_inside_training_checkpoint_folder_you_created --eval --split $wsd_eval_set`. The parameter --split defines the part of the evaluation dataset that will be used. The possible options are: 'semeval2007', 'senseval2', 'senseval3', 'semeval2013', 'semeval2015' and 'ALL'. Use them without the ''.
+After each run the F1 score of the model is printed on the console and a corresponding predictions.txt file is created inside the training checkpoints folder.
 
 ## Citation
 If you use this work, please cite the corresponding [paper](https://blvns.github.io/papers/acl2020.pdf):
