@@ -25,6 +25,11 @@ To evaluate an existing biencoder, run `python biencoder.py --data-path $path_to
 
 Similar commands can be used to run the frozen probe for WSD (`frozen_pretrained_encoder.py`) and the finetuning a pretrained, single encoder classifier for WSD (`finetune_pretrained_encoder.py`).
 
+## How to Reproduce the results of the paper
+In order to reproduce the results the mention library dependences are needed. One problem is that the "Pytorch Transformers 1.1.0" link goes to the wrong package. The correct package is in [this](https://pypi.org/project/pytorch-transformers/) link and can be installed using pip. For convenience I have included in the repo the environment.yml file that was created from my miniconda environment that I used to reproduce the results of the paper.
+
+
+
 ## Citation
 If you use this work, please cite the corresponding [paper](https://blvns.github.io/papers/acl2020.pdf):
 ```
