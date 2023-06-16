@@ -41,6 +41,9 @@ After the training process is finished, there should be a checkpoint file create
 To evaluate the model on the evaluation datasets we use the command as described above. Run `python biencoder.py --data-path $path_to_WSD_Evaluation_Framework_folder --ckpt $path_inside_training_checkpoint_folder_you_created --eval --split $wsd_eval_set`. The parameter --split defines the part of the evaluation dataset that will be used. The possible options are: 'semeval2007', 'senseval2', 'senseval3', 'semeval2013', 'semeval2015' and 'ALL'. Use them without the ''.
 After each run the F1 score of the model is printed on the console and a corresponding predictions.txt file is created inside the training checkpoints folder.
 
+## How to extract word and sense embeddings
+In order to extract the word and sense embeddings that the model creates for the evaluation dataset, we run `python biencoder2.py --data-path $path_to_WSD_Evaluation_Framework_folder --ckpt $path_inside_training_checkpoint_folder_you_created --extract_embeddings --split $wsd_eval_set`
+
 ## Citation
 If you use this work, please cite the corresponding [paper](https://blvns.github.io/papers/acl2020.pdf):
 ```
