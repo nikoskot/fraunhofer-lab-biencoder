@@ -45,7 +45,7 @@ After each run the F1 score of the model is printed on the console and a corresp
 In order to extract the word and sense embeddings that the model creates for one of the evaluation datasets, we run `python biencoder2.py --data-path $path_to_WSD_Evaluation_Framework_folder --ckpt $path_inside_training_checkpoint_folder_you_created --extract_embeddings --embeddings_dataset_source eval --split $wsd_eval_set --embeddings_output_format txt --embeddings_output_folder $path_to_output_folder`.
 The parameter '--embeddings_dataset_source' specifies that we want to extract the embeddings from an evaluation dataset. The parameter '--embeddings_output_format' defines the type of the output file. Can be either txt or pkl (for pickle file). 
 
-In order to extract the word and sense embeddings that the model creates for the training dataset, we run 'python biencoder2.py --data-path $path_to_WSD_Evaluation_Framework_folder --ckpt $path_inside_training_checkpoint_folder_you_created --extract_embeddings --embeddings_dataset_source train --embeddings_output_format txt --embeddings_output_folder $path_to_output_folder --multigpu'.
+In order to extract the word and sense embeddings that the model creates for the training dataset, we run `python biencoder2.py --data-path $path_to_WSD_Evaluation_Framework_folder --ckpt $path_inside_training_checkpoint_folder_you_created --extract_embeddings --embeddings_dataset_source train --embeddings_output_format txt --embeddings_output_folder $path_to_output_folder --multigpu`.
 The '--multigpu' flag is not necessary, I used it for speed and memory issues.
 
 ## Citation
