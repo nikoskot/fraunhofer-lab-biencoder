@@ -77,6 +77,14 @@ parser.add_argument('--extract_embeddings', action='store_true',
 	help='Flag to set script to extract word and sense embeddings (rather than train)')
 # parser.add_argument('--extract_embeddings', default=True,
 # 	help='Flag to set script to extract word and sense embeddings (rather than train)')
+parser.add_argument('--embeddings_dataset_source', type=str, default='train',
+	choices=['eval', 'train'],
+	help='Extract the embeddings from the training dataset or one of the evaluation datasets')
+parser.add_argument('--embeddings_output_format', type=str, default='txt',
+	choices=['txt', 'pkl'],
+	help='The type of file that the embeddings will be save in.')
+parser.add_argument('--embeddings_output_folder', type=str, default='/opt/mlfta/kotarelasn0/embeddings',
+	help='Folder in which the embeddings will be saved.')
 
 #uses these two gpus if training in multi-gpu
 context_device = "cuda:0"
@@ -393,7 +401,7 @@ def _pred(eval_data, model, gloss_dict, multigpu=False):
 
 def _extract_embeddings(eval_data, model, gloss_dict, multigpu=False):
 	model.eval()
-	embeddings = []
+	embeddings = {}
 	for context_ids, context_attn_mask, context_output_mask, example_keys, insts, _ in eval_data:
 		with torch.no_grad(): 
 			#run example through model
@@ -435,7 +443,7 @@ def _extract_embeddings(eval_data, model, gloss_dict, multigpu=False):
 				# Get the sense embedding that produces the maximum inner product
 				sense_embedding = gloss_output[:, pred_idx]
 				# Save the instanse id, the word embedding, the sense embedding and the predicted key
-				embeddings.append((inst, word_embedding, sense_embedding, pred_key))
+				embeddings[inst] = [word_embedding.cpu().numpy(), sense_embedding.cpu().numpy(), pred_key]
 
 	return embeddings
 
@@ -619,7 +627,7 @@ def evaluate_model(args):
 	return
 
 def extract_embeddings(args):
-	print('Extracting word and sense embeddings of WSD model on {}...'.format(args.split))
+	'Extract word and sense embeddings from evalutaion dataset'
 
 	'''
 	LOAD TRAINED MODEL
@@ -629,7 +637,6 @@ def extract_embeddings(args):
 	model.load_state_dict(torch.load(model_path))
 	model = model.cuda()
 	
-
 	'''
 	LOAD TOKENIZER
 	'''
@@ -649,23 +656,129 @@ def extract_embeddings(args):
 	eval_data = preprocess_context(tokenizer, eval_data, bsz=1, max_len=-1)
 
 	'''
-	EVALUATE MODEL
+	Extract embeddings
 	'''
+	# if args.embeddings_dataset_source == 'eval':
+	source = args.split
+	print('Extracting word and sense embeddings of WSD model on {}...'.format(source))
 	embeddings = _extract_embeddings(eval_data, model, gloss_dict, multigpu=False)
-
+		
 	# generate embeddings file
-	pred_filepath = os.path.join(args.ckpt, './{}_extracted_embeddings.txt'.format(args.split))
-	with open(pred_filepath, 'w') as f:
-		for inst, word_embedding, sense_embedding, pred_key in embeddings:
-			f.write('{} {} {}\n'.format(inst, word_embedding, sense_embedding))
+	if args.embeddings_output_format == 'txt':
+		embed_filepath = os.path.join(args.embeddings_output_folder, './{}_extracted_embeddings.txt'.format(source))
+		with open(embed_filepath, 'w') as f:
+			for inst in embeddings:
+				f.write('{} {} {} {}\n'.format(inst, embeddings[inst][0], embeddings[inst][1], embeddings[inst][2]))
 
-	# #run predictions through scorer
-	# gold_filepath = os.path.join(eval_path, '{}.gold.key.txt'.format(args.split))
-	# scorer_path = os.path.join(args.data_path, 'Evaluation_Datasets')
-	# p, r, f1 = evaluate_output(scorer_path, gold_filepath, pred_filepath)
-	# print('f1 of BERT probe on {} test set = {}'.format(args.split, f1))
+	elif args.embeddings_output_format == 'pkl':
+		embed_filepath = os.path.join(args.embeddings_output_folder, './{}_extracted_embeddings.pkl'.format(source))
+		with open(embed_filepath, 'wb') as f:
+			pickle.dump(embeddings, f)
+
+	print('Embeddings saved in ' + embed_filepath)
 
 	return
+
+def extract_training_embeddings(args):
+	'Extract word and sense embeddings from training dataset'
+
+	'''
+	LOAD TRAINED MODEL
+	'''
+	model = BiEncoderModel(args.encoder_name, freeze_gloss=args.freeze_gloss, freeze_context=args.freeze_context)
+	model_path = os.path.join(args.ckpt, 'best_model.ckpt')
+	model.load_state_dict(torch.load(model_path))
+	# model = model.cuda()
+	if args.multigpu: 
+		model.gloss_encoder = model.gloss_encoder.to(gloss_device)
+		model.context_encoder = model.context_encoder.to(context_device)
+	else:
+		model = model.cuda()
+	
+	'''
+	LOAD TOKENIZER
+	'''
+	tokenizer = load_tokenizer(args.encoder_name)
+
+	'''
+	LOAD TRAINING SET
+	'''
+	train_path = os.path.join(args.data_path, 'Training_Corpora/SemCor/')
+	train_data = load_data(train_path, 'semcor')
+
+	#load gloss dictionary (all senses from wordnet for each lemma/pos pair that occur in data)
+	wn_path = os.path.join(args.data_path, 'Data_Validation/candidatesWN30.txt')
+	wn_senses = load_wn_senses(wn_path)
+	train_gloss_dict, _ = load_and_preprocess_glosses(train_data, tokenizer, wn_senses, max_len=args.gloss_max_length)
+
+	train_data = preprocess_context(tokenizer, train_data, bsz=1, max_len=-1)
+
+	source = 'train_dataset'
+	print('Extracting word and sense embeddings of WSD model on {}...'.format(source))
+
+	model.eval()
+	embeddings = {}
+	train_data = tqdm(list(train_data))
+	with torch.no_grad():
+		for context_ids, context_attn_mask, context_output_mask, example_keys, insts, labels in train_data:
+			
+			if args.multigpu:
+				context_ids = context_ids.to(context_device)
+				context_attn_mask = context_attn_mask.to(context_device)
+			else:
+				context_ids = context_ids.cuda()
+				context_attn_mask = context_attn_mask.cuda()
+			context_output = model.context_forward(context_ids, context_attn_mask, context_output_mask)
+
+			for j, (key, inst) in enumerate(zip(example_keys, insts)):
+				output = context_output.split(1,dim=0)[j]
+
+				gloss_ids, gloss_attn_mask, sense_keys = train_gloss_dict[key]
+				if args.multigpu:
+					gloss_ids = gloss_ids.to(gloss_device)
+					gloss_attn_mask = gloss_attn_mask.to(gloss_device)
+				else:
+					gloss_ids = gloss_ids.cuda()
+					gloss_attn_mask = gloss_attn_mask.cuda()
+
+				gloss_output = model.gloss_forward(gloss_ids, gloss_attn_mask)
+				gloss_output = gloss_output.transpose(0,1)
+
+				if args.multigpu:
+					output = output.cpu()
+					gloss_output = gloss_output.cpu()
+				
+				# output = torch.mm(output, gloss_output)
+				# Save the word embedding of the current word
+				word_embedding = output
+				# Multiply the word embedding with each of the sense embeddings
+				output = torch.mm(output, gloss_output)
+				# Get the index of the sense that produces the maximum inner product
+				pred_idx = output.topk(1, dim=-1)[1].squeeze().item()
+				# Get the gold key of the sense that produces the maximum inner product
+				pred_key = sense_keys[pred_idx]
+				# Get the sense embedding that produces the maximum inner product
+				sense_embedding = gloss_output[:, pred_idx]
+				# Save the instanse id, the word embedding, the sense embedding and the predicted key
+				embeddings[inst] = [word_embedding.cpu().numpy(), sense_embedding.cpu().numpy(), pred_key]
+
+	# generate embeddings file
+	if args.embeddings_output_format == 'txt':
+		embed_filepath = os.path.join(args.embeddings_output_folder, './training_dataset__extracted_embeddings.txt')
+		with open(embed_filepath, 'w') as f:
+			for inst in embeddings:
+				f.write('{} {} {} {}\n'.format(inst, embeddings[inst][0], embeddings[inst][1], embeddings[inst][2]))
+
+	elif args.embeddings_output_format == 'pkl':
+		embed_filepath = os.path.join(args.embeddings_output_folder, './training_dataset__extracted_embeddings.pkl')
+		with open(embed_filepath, 'wb') as f:
+			pickle.dump(embeddings, f)
+
+	print('Embeddings saved in ' + embed_filepath)
+
+	return
+
+
 
 if __name__ == "__main__":
 	if not torch.cuda.is_available():
@@ -688,7 +801,8 @@ if __name__ == "__main__":
 
 	#evaluate model saved at checkpoint or...
 	if args.eval: evaluate_model(args)
-	elif args.extract_embeddings: extract_embeddings(args)
+	elif args.extract_embeddings and (args.embeddings_dataset_source == 'eval'): extract_embeddings(args)
+	elif args.extract_embeddings and (args.embeddings_dataset_source == 'train'): extract_training_embeddings(args)
 	#train model
 	else: train_model(args)
 
