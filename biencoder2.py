@@ -401,7 +401,8 @@ def _pred(eval_data, model, gloss_dict, multigpu=False):
 
 def _extract_embeddings(eval_data, model, gloss_dict, multigpu=False):
 	model.eval()
-	embeddings = {}
+	word_embeddings = {}
+	sense_embeddings = {}
 	for context_ids, context_attn_mask, context_output_mask, example_keys, insts, _ in eval_data:
 		with torch.no_grad(): 
 			#run example through model
@@ -443,9 +444,10 @@ def _extract_embeddings(eval_data, model, gloss_dict, multigpu=False):
 				# Get the sense embedding that produces the maximum inner product
 				sense_embedding = gloss_output[:, pred_idx]
 				# Save the instanse id, the word embedding, the sense embedding and the predicted key
-				embeddings[inst] = [word_embedding.cpu().numpy(), sense_embedding.cpu().numpy(), pred_key]
+				word_embeddings[inst] = word_embedding.cpu().numpy()
+				sense_embeddings[inst] = sense_embedding.cpu().numpy()
 
-	return embeddings
+	return word_embeddings, sense_embeddings
 
 def train_model(args):
 	print('Training WSD bi-encoder model...')
@@ -661,21 +663,28 @@ def extract_embeddings(args):
 	# if args.embeddings_dataset_source == 'eval':
 	source = args.split
 	print('Extracting word and sense embeddings of WSD model on {}...'.format(source))
-	embeddings = _extract_embeddings(eval_data, model, gloss_dict, multigpu=False)
-		
-	# generate embeddings file
+	word_embeddings, sense_embeddings = _extract_embeddings(eval_data, model, gloss_dict, multigpu=False)
+
 	if args.embeddings_output_format == 'txt':
-		embed_filepath = os.path.join(args.embeddings_output_folder, './{}_extracted_embeddings.txt'.format(source))
-		with open(embed_filepath, 'w') as f:
-			for inst in embeddings:
-				f.write('{} {} {} {}\n'.format(inst, embeddings[inst][0], embeddings[inst][1], embeddings[inst][2]))
+		w_embed_filepath = os.path.join(args.embeddings_output_folder, './{}_word_embeddings.txt'.format(source))
+		s_embed_filepath = os.path.join(args.embeddings_output_folder, './{}_sense_embeddings.txt'.format(source))
+		with open(w_embed_filepath, 'w') as f:
+			for inst in word_embeddings:
+				f.write('{} {}\n'.format(inst, word_embeddings[inst]))
+		with open(s_embed_filepath, 'w') as g:
+			for inst in sense_embeddings:
+				g.write('{} {}\n'.format(inst, sense_embeddings[inst]))
 
 	elif args.embeddings_output_format == 'pkl':
-		embed_filepath = os.path.join(args.embeddings_output_folder, './{}_extracted_embeddings.pkl'.format(source))
-		with open(embed_filepath, 'wb') as f:
-			pickle.dump(embeddings, f)
+		w_embed_filepath = os.path.join(args.embeddings_output_folder, './{}_word_embeddings.pkl'.format(source))
+		s_embed_filepath = os.path.join(args.embeddings_output_folder, './{}_sense_embeddings.pkl'.format(source))
+		with open(w_embed_filepath, 'wb') as h:
+			pickle.dump(word_embeddings, h)
+		with open(s_embed_filepath, 'wb') as l:
+			pickle.dump(sense_embeddings, l)
 
-	print('Embeddings saved in ' + embed_filepath)
+	print('Word embeddings saved in ' + w_embed_filepath)
+	print('Sense embeddings saved in ' + s_embed_filepath)
 
 	return
 
@@ -717,7 +726,8 @@ def extract_training_embeddings(args):
 	print('Extracting word and sense embeddings of WSD model on {}...'.format(source))
 
 	model.eval()
-	embeddings = {}
+	word_embeddings = {}
+	sense_embeddings = {}
 	train_data = tqdm(list(train_data))
 	with torch.no_grad():
 		for context_ids, context_attn_mask, context_output_mask, example_keys, insts, labels in train_data:
@@ -760,21 +770,30 @@ def extract_training_embeddings(args):
 				# Get the sense embedding that produces the maximum inner product
 				sense_embedding = gloss_output[:, pred_idx]
 				# Save the instanse id, the word embedding, the sense embedding and the predicted key
-				embeddings[inst] = [word_embedding.cpu().numpy(), sense_embedding.cpu().numpy(), pred_key]
+				word_embeddings[inst] = word_embedding.cpu().numpy()
+				sense_embeddings[inst] = sense_embedding.cpu().numpy()
 
 	# generate embeddings file
 	if args.embeddings_output_format == 'txt':
-		embed_filepath = os.path.join(args.embeddings_output_folder, './training_dataset__extracted_embeddings.txt')
-		with open(embed_filepath, 'w') as f:
-			for inst in embeddings:
-				f.write('{} {} {} {}\n'.format(inst, embeddings[inst][0], embeddings[inst][1], embeddings[inst][2]))
+		w_embed_filepath = os.path.join(args.embeddings_output_folder, './training_dataset_word_embeddings.txt')
+		s_embed_filepath = os.path.join(args.embeddings_output_folder, './training_dataset_sense_embeddings.txt')
+		with open(w_embed_filepath, 'w') as f:
+			for inst in word_embeddings:
+				f.write('{} {}\n'.format(inst, word_embeddings[inst]))
+		with open(s_embed_filepath, 'w') as g:
+			for inst in sense_embeddings:
+				g.write('{} {}\n'.format(inst, sense_embeddings[inst]))
 
 	elif args.embeddings_output_format == 'pkl':
-		embed_filepath = os.path.join(args.embeddings_output_folder, './training_dataset__extracted_embeddings.pkl')
-		with open(embed_filepath, 'wb') as f:
-			pickle.dump(embeddings, f)
+		w_embed_filepath = os.path.join(args.embeddings_output_folder, './training_dataset_word_embeddings.pkl')
+		s_embed_filepath = os.path.join(args.embeddings_output_folder, './training_dataset_sense_embeddings.pkl')
+		with open(w_embed_filepath, 'wb') as h:
+			pickle.dump(word_embeddings, h)
+		with open(s_embed_filepath, 'wb') as l:
+			pickle.dump(sense_embeddings, l)
 
-	print('Embeddings saved in ' + embed_filepath)
+	print('Word embeddings saved in ' + w_embed_filepath)
+	print('Sense embeddings saved in ' + s_embed_filepath)
 
 	return
 
